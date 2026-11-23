@@ -5,6 +5,8 @@
 // - Contadores dinámicos, hash en la URL, modal <dialog>
 // - Imágenes responsivas (srcset/sizes) con carga diferida
 // - Tarjetas "fantasma", estados de error y botón Reintentar
+// - v3: filtros en la URL (URLSearchParams) + «Limpiar filtros»,
+//       modo «Comparar» (máx. 3) y «Volver arriba» (IntersectionObserver)
 // =============================================================
 
 const RUTA_DATOS = "data/productos.json";
@@ -21,6 +23,13 @@ const ANCHO_ORIGINAL = 900; // la foto original sigue en img/productos/
 const SIZES_MODAL = "(max-width: 700px) calc(100vw - 2rem), 460px";
 
 const CANTIDAD_FANTASMAS = 8;
+
+// --- Configuración v3 -------------------------------------------
+const ORDEN_DEFECTO = "precio-asc";
+const MAX_LONGITUD_BUSQUEDA = 80; // recorta valores absurdos que vengan en ?q=
+const MAX_COMPARAR = 3; // máximo de productos en la comparación
+const MIN_COMPARAR = 2; // mínimo para habilitar «Ver comparativa» (ponga 1 si lo desea)
+const MARGEN_CABECERA = 80; // px de la cabecera fija (para el IntersectionObserver)
 const EXTENSIONES_VALIDAS = /\.(?:jpe?g|png|webp|avif|gif|svg)$/i;
 
 // --- Referencias al DOM ---------------------------------------
@@ -34,6 +43,20 @@ const estado = document.querySelector("#estado");
 const aviso = document.querySelector("#aviso");
 const btnReintentar = document.querySelector("#reintentar");
 const plantilla = document.querySelector("#tpl-producto");
+const btnLimpiar = document.querySelector("#limpiar-filtros");
+const seccionCatalogo = document.querySelector("#catalogo");
+
+// Reto 2: barra, comparativa y botón «volver arriba»
+const barra = document.querySelector("#barra-comparar");
+const barraContador = document.querySelector("#barra-contador");
+const barraLista = document.querySelector("#barra-lista");
+const btnVaciar = document.querySelector("#barra-vaciar");
+const btnVer = document.querySelector("#barra-ver");
+const dlgComparar = document.querySelector("#modal-comparar");
+const contTabla = document.querySelector("#comparar-tabla");
+const btnCompararCerrar = document.querySelector("#comparar-cerrar");
+const btnCompararCerrarPie = document.querySelector("#comparar-cerrar-pie");
+const btnArriba = document.querySelector("#volver-arriba");
 
 const modal = document.querySelector("#modal");
 const modalImg = document.querySelector("#modal-img");
@@ -57,6 +80,9 @@ let ocultarAgotados = false;
 let cargando = false;
 let tarjetaOrigen = null; // tarjeta que abrió el modal (para devolver el foco)
 let temporizadorBusqueda = null;
+let firmaGrilla = null; // ids pintados en #grilla: evita re-renderizar lo mismo
+let seleccion = []; // ids de productos a comparar (en orden de selección)
+let temporizadorLimite = null;
 
 // Formato de moneda peruana: S/ 89.90
 const soles = new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN" });
@@ -275,11 +301,95 @@ function actualizarPresionados() {
   });
 }
 
-function actualizarVista() {
+// opciones.sincronizarURL = false se usa solo en la carga inicial, para no
+// reescribir la URL que el usuario trajo (p. ej. un ancla como #contacto).
+function actualizarVista({ sincronizarURL = true } = {}) {
   const { lista, conteos } = calcularVista();
   actualizarPresionados();
   actualizarContadores(conteos);
   renderizarCatalogo(lista);
+  actualizarBotonLimpiar();
+  if (sincronizarURL) sincronizarConURL();
+}
+
+// =============================================================
+// 4b. Reto 1: filtros en la URL (URLSearchParams) + «Limpiar filtros»
+//     ?q=flan&orden=precio-desc&agotados=1#Postres
+//     (la categoría sigue viajando en el hash, como antes)
+// =============================================================
+function hayFiltrosActivos() {
+  return (
+    busqueda.trim() !== "" ||
+    orden !== ORDEN_DEFECTO ||
+    ocultarAgotados ||
+    categoriaActiva !== TODAS
+  );
+}
+
+function actualizarBotonLimpiar() {
+  btnLimpiar.disabled = !hayFiltrosActivos();
+}
+
+// Lee y VALIDA los parámetros: nunca se confía en lo que venga en la URL.
+// URLSearchParams ya decodifica (%20, +, tildes) y no lanza error con
+// secuencias % inválidas; aquí se limpia y se acota el resultado.
+function leerFiltrosDeURL() {
+  const params = new URLSearchParams(location.search);
+
+  const q = (params.get("q") ?? "")
+    .replace(/[\u0000-\u001f\u007f]/g, "") // sin caracteres de control
+    .trim()
+    .slice(0, MAX_LONGITUD_BUSQUEDA);
+
+  const ordenURL = params.get("orden");
+  const agotados = params.get("agotados");
+
+  return {
+    q,
+    orden: Object.hasOwn(COMPARADORES, ordenURL) ? ordenURL : ORDEN_DEFECTO,
+    agotados: agotados === "1" || agotados === "true",
+  };
+}
+
+// Estado (variables) -> controles del DOM
+function volcarEstadoEnControles() {
+  campoBuscador.value = busqueda;
+  campoOrden.value = orden;
+  casillaAgotados.checked = ocultarAgotados;
+}
+
+// Solo se escriben los valores distintos del defecto: URL corta y limpia.
+function sincronizarConURL() {
+  const params = new URLSearchParams();
+  if (busqueda.trim() !== "") params.set("q", busqueda.trim());
+  if (orden !== ORDEN_DEFECTO) params.set("orden", orden);
+  if (ocultarAgotados) params.set("agotados", "1");
+
+  const consulta = params.toString();
+  const hash = categoriaActiva === TODAS ? "" : `#${encodeURIComponent(categoriaActiva)}`;
+  const url = location.pathname + (consulta ? `?${consulta}` : "") + hash;
+
+  // replaceState (no pushState): no llena el historial con cada tecla
+  try {
+    history.replaceState(null, "", url);
+  } catch (error) {
+    console.warn("No se pudo actualizar la URL:", error);
+  }
+}
+
+function limpiarFiltros() {
+  clearTimeout(temporizadorBusqueda);
+  busqueda = "";
+  orden = ORDEN_DEFECTO;
+  ocultarAgotados = false;
+  categoriaActiva = TODAS;
+
+  volcarEstadoEnControles();
+  actualizarVista(); // recalcula contadores, grilla, #estado y limpia la URL
+  estado.textContent = `Filtros restablecidos. ${estado.textContent}`;
+
+  // El botón queda deshabilitado: se devuelve el foco al buscador
+  campoBuscador.focus({ preventScroll: true });
 }
 
 // =============================================================
@@ -341,6 +451,10 @@ function crearTarjeta(p) {
   nodo.querySelector(".tarjeta__porciones").textContent =
     p.porciones > 1 ? `${p.porciones} porciones` : "1 unidad";
 
+  const btnComparar = nodo.querySelector(".tarjeta__comparar");
+  btnComparar.setAttribute("aria-label", `Comparar ${p.nombre}`);
+  btnComparar.setAttribute("aria-pressed", String(seleccion.includes(p.id)));
+
   if (p.stock === 0) {
     etiqueta.textContent = "Agotado";
     etiqueta.classList.add("etiqueta--agotado");
@@ -365,18 +479,24 @@ function textoEstado(total) {
 }
 
 function renderizarCatalogo(lista) {
-  if (lista.length === 0) {
-    grilla.replaceChildren();
-  } else {
-    const fragmento = document.createDocumentFragment();
-    lista.forEach((p) => fragmento.append(crearTarjeta(p)));
-    grilla.replaceChildren(fragmento);
+  // Si el resultado es idéntico (mismos productos, mismo orden) no se toca el DOM
+  const firma = lista.map((p) => p.id).join(",");
+  if (firma !== firmaGrilla) {
+    firmaGrilla = firma;
+    if (lista.length === 0) {
+      grilla.replaceChildren();
+    } else {
+      const fragmento = document.createDocumentFragment();
+      lista.forEach((p) => fragmento.append(crearTarjeta(p)));
+      grilla.replaceChildren(fragmento);
+    }
   }
   estado.textContent = textoEstado(lista.length);
 }
 
 // Tarjetas "fantasma" mientras fetch resuelve
 function mostrarFantasmas(cantidad = CANTIDAD_FANTASMAS) {
+  firmaGrilla = null; // la grilla ya no contiene tarjetas reales
   const fragmento = document.createDocumentFragment();
   for (let i = 0; i < cantidad; i++) {
     const li = document.createElement("li");
@@ -456,18 +576,6 @@ function leerCategoriaDeHash() {
   return encontrada ?? null;
 }
 
-function actualizarHash() {
-  const url =
-    categoriaActiva === TODAS
-      ? location.pathname + location.search
-      : `#${encodeURIComponent(categoriaActiva)}`;
-  try {
-    history.replaceState(null, "", url);
-  } catch (error) {
-    console.warn("No se pudo actualizar la URL:", error);
-  }
-}
-
 // Si el usuario edita el hash a mano en la barra de direcciones
 window.addEventListener("hashchange", () => {
   if (productos.length === 0) return;
@@ -490,14 +598,14 @@ contFiltros.addEventListener("click", (evento) => {
   if (!boton || boton.dataset.categoria === categoriaActiva) return;
 
   categoriaActiva = boton.dataset.categoria;
-  actualizarHash();
-  actualizarVista();
+  actualizarVista(); // también actualiza la URL
 });
 
 // Controles: "input" para el buscador, "change" para select y casilla
 contControles.addEventListener("input", (evento) => {
   if (evento.target !== campoBuscador) return;
   busqueda = campoBuscador.value;
+  actualizarBotonLimpiar(); // reacciona al instante, sin esperar el debounce
 
   // Pequeña espera para no renderizar (ni anunciar) en cada tecla
   clearTimeout(temporizadorBusqueda);
@@ -519,7 +627,14 @@ contControles.addEventListener("change", (evento) => {
 // Tarjetas: un solo listener en #grilla
 grilla.addEventListener("click", (evento) => {
   const tarjeta = evento.target.closest(".tarjeta[data-id]");
-  if (tarjeta && grilla.contains(tarjeta)) abrirModal(tarjeta);
+  if (!tarjeta || !grilla.contains(tarjeta)) return;
+
+  // «Comparar» NO abre el detalle
+  if (evento.target.closest(".tarjeta__comparar")) {
+    alternarComparacion(Number(tarjeta.dataset.id));
+    return;
+  }
+  abrirModal(tarjeta);
 });
 
 grilla.addEventListener("keydown", (evento) => {
@@ -530,11 +645,303 @@ grilla.addEventListener("keydown", (evento) => {
   abrirModal(tarjeta);
 });
 
+// Botón «Limpiar filtros»
+btnLimpiar.addEventListener("click", limpiarFiltros);
+
 // Botón «Reintentar»
 btnReintentar.addEventListener("click", () => {
   iniciar();
   estado.focus(); // el botón se oculta: se devuelve el foco al mensaje de estado
 });
+
+// =============================================================
+// 9b. Reto 2: modo «Comparar» (máx. 3), barra flotante y <dialog>
+// =============================================================
+const textoStock = (p) =>
+  p.stock === 0
+    ? "Agotado"
+    : `${p.stock} ${p.stock === 1 ? "unidad disponible" : "unidades disponibles"}`;
+
+const textoPorciones = (p) => (p.porciones > 1 ? `${p.porciones} porciones` : "1 unidad");
+
+// Mensaje para lectores de pantalla (#estado es aria-live="polite").
+// Se vacía primero para que se vuelva a anunciar aunque el texto se repita.
+function anunciar(mensaje) {
+  estado.classList.remove("estado--error");
+  estado.textContent = "";
+  setTimeout(() => {
+    estado.textContent = mensaje;
+  }, 30);
+}
+
+const productosSeleccionados = () =>
+  seleccion.map((id) => productosPorId.get(id)).filter(Boolean);
+
+// Solo toca los botones «Comparar» ya pintados: NO re-renderiza la grilla
+function actualizarBotonesComparar() {
+  grilla.querySelectorAll(".tarjeta[data-id]").forEach((tarjeta) => {
+    const marcado = seleccion.includes(Number(tarjeta.dataset.id));
+    tarjeta.querySelector(".tarjeta__comparar")?.setAttribute("aria-pressed", String(marcado));
+  });
+}
+
+function alternarComparacion(id) {
+  const p = productosPorId.get(id);
+  if (!p) return;
+
+  const posicion = seleccion.indexOf(id);
+  if (posicion >= 0) {
+    seleccion.splice(posicion, 1);
+    anunciar(`«${p.nombre}» se quitó de la comparación. Quedan ${seleccion.length} de ${MAX_COMPARAR}.`);
+  } else if (seleccion.length >= MAX_COMPARAR) {
+    // 4.º producto: se impide y se avisa (voz + mensaje visible en la barra)
+    anunciar(
+      `Solo puede comparar hasta ${MAX_COMPARAR} productos. Quite uno para añadir «${p.nombre}».`,
+    );
+    avisarLimiteEnBarra();
+    return;
+  } else {
+    seleccion.push(id);
+    anunciar(`«${p.nombre}» se añadió a la comparación. Lleva ${seleccion.length} de ${MAX_COMPARAR}.`);
+  }
+
+  actualizarBotonesComparar();
+  renderizarBarra();
+}
+
+function textoContador(cantidad) {
+  const base = `Comparar: ${cantidad} de ${MAX_COMPARAR}`;
+  const faltan = MIN_COMPARAR - cantidad;
+  return faltan > 0 ? `${base} · elija ${faltan} más para comparar` : base;
+}
+
+// Mensaje visible (la voz ya se anunció en #estado)
+function avisarLimiteEnBarra() {
+  barraContador.textContent = `Máximo ${MAX_COMPARAR} productos: quite uno para añadir otro.`;
+  barra.classList.add("barra-comparar--limite");
+  clearTimeout(temporizadorLimite);
+  temporizadorLimite = setTimeout(() => {
+    barra.classList.remove("barra-comparar--limite");
+    barraContador.textContent = textoContador(seleccion.length);
+  }, 2800);
+}
+
+// La barra tiene como máximo 3 chips: se rehace completa sin problema
+function renderizarBarra() {
+  const items = productosSeleccionados();
+  barra.hidden = items.length === 0;
+  document.body.classList.toggle("con-barra", items.length > 0);
+
+  if (items.length === 0) {
+    barraLista.replaceChildren();
+    return;
+  }
+
+  const fragmento = document.createDocumentFragment();
+  items.forEach((p) => {
+    const li = document.createElement("li");
+    li.className = "chip";
+
+    const img = document.createElement("img");
+    img.width = 40;
+    img.height = 40;
+    configurarImagen(img, p, "40px");
+    img.alt = ""; // el nombre ya está escrito al lado
+
+    const nombre = document.createElement("span");
+    nombre.className = "chip__nombre";
+    nombre.textContent = p.nombre;
+
+    const quitar = document.createElement("button");
+    quitar.type = "button";
+    quitar.className = "chip__quitar";
+    quitar.dataset.id = p.id;
+    quitar.setAttribute("aria-label", `Quitar ${p.nombre} de la comparación`);
+    quitar.textContent = "✕";
+
+    li.append(img, nombre, quitar);
+    fragmento.append(li);
+  });
+  barraLista.replaceChildren(fragmento);
+
+  barra.classList.remove("barra-comparar--limite");
+  barraContador.textContent = textoContador(items.length);
+  btnVer.disabled = items.length < MIN_COMPARAR;
+}
+
+// El alto de la barra se publica como variable CSS: el pie de página y el botón
+// «Volver arriba» se apartan para no quedar tapados.
+if ("ResizeObserver" in window) {
+  new ResizeObserver(() => {
+    document.documentElement.style.setProperty("--alto-barra", `${barra.hidden ? 0 : barra.offsetHeight}px`);
+  }).observe(barra);
+}
+
+// Quitar un chip o vaciar: el foco no debe perderse
+function enfocarTrasQuitar(indice) {
+  const botones = barraLista.querySelectorAll(".chip__quitar");
+  const destino =
+    botones[Math.min(indice, botones.length - 1)] ??
+    grilla.querySelector(".tarjeta__comparar") ??
+    campoBuscador;
+  if (!destino.disabled) destino.focus();
+}
+
+barraLista.addEventListener("click", (evento) => {
+  const quitar = evento.target.closest(".chip__quitar");
+  if (!quitar) return;
+
+  const id = Number(quitar.dataset.id);
+  const indice = seleccion.indexOf(id);
+  const p = productosPorId.get(id);
+  if (indice < 0) return;
+
+  seleccion.splice(indice, 1);
+  anunciar(`«${p?.nombre ?? "Producto"}» se quitó de la comparación. Quedan ${seleccion.length} de ${MAX_COMPARAR}.`);
+  actualizarBotonesComparar();
+  renderizarBarra();
+  enfocarTrasQuitar(indice);
+});
+
+btnVaciar.addEventListener("click", () => {
+  if (seleccion.length === 0) return;
+  seleccion = [];
+  anunciar("Se vació la comparación.");
+  actualizarBotonesComparar();
+  renderizarBarra();
+  enfocarTrasQuitar(0);
+});
+
+// --- Tabla comparativa dentro del <dialog> ----------------------
+function celda(etiqueta, texto, clase) {
+  const el = document.createElement(etiqueta);
+  if (clase) el.className = clase;
+  el.textContent = texto;
+  return el;
+}
+
+const FILAS_COMPARATIVA = [
+  { titulo: "Categoría", valor: (p) => p.categoria },
+  { titulo: "Precio", valor: (p) => soles.format(p.precio), clave: "precio" },
+  { titulo: "Stock", valor: textoStock, clave: "stock" },
+  { titulo: "Porciones", valor: textoPorciones },
+  { titulo: "Descripción", valor: (p) => p.descripcion || "—" },
+];
+
+function construirTabla(items) {
+  const tabla = document.createElement("table");
+  tabla.className = "tabla-comparar";
+  tabla.style.setProperty("--columnas", items.length);
+
+  tabla.append(celda("caption", `Comparativa de ${items.length} productos`, "visualmente-oculto"));
+
+  // Cabecera: una columna por producto
+  const cabecera = tabla.createTHead().insertRow();
+  const esquina = celda("th", "Característica", "visualmente-oculto");
+  esquina.scope = "col";
+  cabecera.append(esquina);
+
+  items.forEach((p) => {
+    const th = document.createElement("th");
+    th.scope = "col";
+    th.className = "tabla-comparar__producto";
+
+    const img = document.createElement("img");
+    img.width = 96;
+    img.height = 96;
+    configurarImagen(img, p, "96px");
+    img.alt = "";
+
+    th.append(img, celda("span", p.nombre));
+    cabecera.append(th);
+  });
+
+  // Cuerpo: una fila por característica
+  const cuerpo = tabla.createTBody();
+  const precios = items.map((p) => p.precio);
+  const minimo = Math.min(...precios);
+  const hayDiferencia = minimo !== Math.max(...precios);
+
+  FILAS_COMPARATIVA.forEach((fila) => {
+    const tr = cuerpo.insertRow();
+    const titulo = celda("th", fila.titulo);
+    titulo.scope = "row";
+    tr.append(titulo);
+
+    items.forEach((p) => {
+      const td = celda("td", fila.valor(p));
+      if (fila.clave === "stock" && p.stock === 0) td.classList.add("tabla-comparar__agotado");
+      if (fila.clave === "precio" && hayDiferencia && p.precio === minimo) {
+        td.classList.add("tabla-comparar__mejor");
+        td.append(celda("span", "Más económico", "insignia"));
+      }
+      tr.append(td);
+    });
+  });
+
+  return tabla;
+}
+
+function abrirComparativa() {
+  const items = productosSeleccionados();
+  if (items.length < MIN_COMPARAR || typeof dlgComparar.showModal !== "function") return;
+
+  contTabla.replaceChildren(construirTabla(items));
+  contTabla.scrollLeft = 0;
+  dlgComparar.showModal(); // Escape lo cierra de forma nativa
+}
+
+btnVer.addEventListener("click", abrirComparativa);
+btnCompararCerrar.addEventListener("click", () => dlgComparar.close());
+btnCompararCerrarPie.addEventListener("click", () => dlgComparar.close());
+
+// Clic en el fondo oscuro
+dlgComparar.addEventListener("click", (evento) => {
+  if (evento.target === dlgComparar) dlgComparar.close();
+});
+
+// Se dispara con Escape, botones y fondo: el foco vuelve al disparador
+dlgComparar.addEventListener("close", () => {
+  const destino = !barra.hidden && !btnVer.disabled ? btnVer : campoBuscador;
+  if (destino.isConnected && !destino.disabled) destino.focus();
+});
+
+// =============================================================
+// 9c. Reto 2: botón «Volver arriba y buscar» (IntersectionObserver)
+// =============================================================
+function volverArribaYBuscar() {
+  const reducir = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // Sube al inicio del catálogo (el buscador queda a la vista).
+  // Para subir al inicio absoluto de la página use window.scrollTo({ top: 0, ... }).
+  seccionCatalogo.scrollIntoView({ behavior: reducir ? "auto" : "smooth", block: "start" });
+
+  // preventScroll: el foco no interrumpe el desplazamiento suave
+  if (!campoBuscador.disabled) campoBuscador.focus({ preventScroll: true });
+}
+
+function configurarVolverArriba() {
+  btnArriba.addEventListener("click", volverArribaYBuscar);
+
+  if (!("IntersectionObserver" in window)) {
+    btnArriba.classList.add("volver-arriba--visible"); // navegadores muy antiguos
+    return;
+  }
+
+  // Referencia: el bloque de controles (parte superior del catálogo).
+  // Se observa él y no la primera tarjeta porque la grilla se vuelve a pintar.
+  const observador = new IntersectionObserver(
+    ([entrada]) => {
+      // "Salió por arriba" = el usuario ya pasó de largo hacia abajo.
+      // Si está por debajo del viewport (página recién abierta) no se muestra.
+      const limiteSuperior = entrada.rootBounds ? entrada.rootBounds.top : 0;
+      const pasoPorArriba = !entrada.isIntersecting && entrada.boundingClientRect.top < limiteSuperior;
+      btnArriba.classList.toggle("volver-arriba--visible", pasoPorArriba);
+    },
+    { rootMargin: `-${MARGEN_CABECERA}px 0px 0px 0px` }, // descuenta la cabecera fija
+  );
+  observador.observe(contControles);
+}
 
 // =============================================================
 // 10. Inicio
@@ -543,14 +950,17 @@ function activarControles(activo) {
   contControles.querySelectorAll("input, select").forEach((el) => {
     el.disabled = !activo;
   });
+  if (!activo) btnLimpiar.disabled = true; // al activar lo decide actualizarBotonLimpiar()
 }
 
-// El navegador puede restaurar valores al recargar: se leen del DOM
-function sincronizarControles() {
-  busqueda = campoBuscador.value;
-  orden = campoOrden.value in COMPARADORES ? campoOrden.value : "precio-asc";
-  campoOrden.value = orden;
-  ocultarAgotados = casillaAgotados.checked;
+// La URL manda: se restaura el estado desde ella y se vuelca en los controles
+// (así se ignoran también los valores que el navegador restaure al recargar).
+function restaurarFiltrosDesdeURL() {
+  const filtros = leerFiltrosDeURL();
+  busqueda = filtros.q;
+  orden = filtros.orden;
+  ocultarAgotados = filtros.agotados;
+  volcarEstadoEnControles();
 }
 
 function mostrarError(error) {
@@ -558,6 +968,9 @@ function mostrarError(error) {
 
   productos = [];
   productosPorId = new Map();
+  firmaGrilla = null;
+  seleccion = [];
+  renderizarBarra();
   grilla.replaceChildren();
   contFiltros.replaceChildren();
 
@@ -599,10 +1012,12 @@ async function iniciar() {
     categorias = obtenerCategorias(productos);
     categoriaActiva = leerCategoriaDeHash() ?? TODAS;
 
-    sincronizarControles();
+    restaurarFiltrosDesdeURL();
+    seleccion = seleccion.filter((id) => productosPorId.has(id)); // por si se recargó el JSON
     renderizarFiltros();
     activarControles(true);
-    actualizarVista();
+    actualizarVista({ sincronizarURL: false });
+    renderizarBarra();
   } catch (error) {
     mostrarError(error);
   } finally {
@@ -611,4 +1026,5 @@ async function iniciar() {
   }
 }
 
+configurarVolverArriba();
 iniciar();

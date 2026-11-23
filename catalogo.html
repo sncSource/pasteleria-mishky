@@ -70,6 +70,11 @@
           <input id="ocultar-agotados" type="checkbox" disabled />
           <span>Ocultar agotados</span>
         </label>
+
+        <!-- Reto 1: se habilita solo si hay algún filtro distinto al estado por defecto -->
+        <button type="button" id="limpiar-filtros" class="boton boton--secundario boton--limpiar" disabled>
+          Limpiar filtros
+        </button>
       </div>
 
       <!-- Los botones de categoría se generan desde productos.json -->
@@ -130,6 +135,45 @@
       </div>
     </dialog>
 
+    <!-- Reto 2: barra flotante inferior de comparación -->
+    <aside id="barra-comparar" class="barra-comparar" aria-label="Productos seleccionados para comparar" hidden>
+      <div class="contenedor barra-comparar__interior">
+        <div class="barra-comparar__info">
+          <p id="barra-contador" class="barra-comparar__contador"></p>
+          <ul id="barra-lista" class="barra-comparar__lista"></ul>
+        </div>
+        <div class="barra-comparar__acciones">
+          <button type="button" id="barra-vaciar" class="boton boton--secundario">Vaciar</button>
+          <button type="button" id="barra-ver" class="boton" aria-haspopup="dialog">Ver comparativa</button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Reto 2: <dialog> nativo con la tabla comparativa -->
+    <dialog id="modal-comparar" class="modal modal--comparar" aria-labelledby="comparar-titulo">
+      <div class="comparar__contenido">
+        <button type="button" id="comparar-cerrar" class="modal__cerrar" aria-label="Cerrar comparativa">
+          ✕
+        </button>
+        <h2 id="comparar-titulo" class="comparar__titulo">Comparar productos</h2>
+        <div
+          id="comparar-tabla"
+          class="tabla-comparar-contenedor"
+          role="region"
+          aria-label="Tabla comparativa de productos"
+          tabindex="0"
+        ></div>
+        <div class="comparar__pie">
+          <button type="button" id="comparar-cerrar-pie" class="boton">Cerrar</button>
+        </div>
+      </div>
+    </dialog>
+
+    <!-- Reto 2: botón flotante que aparece con IntersectionObserver -->
+    <button type="button" id="volver-arriba" class="volver-arriba">
+      <span aria-hidden="true">↑</span> Volver arriba y buscar
+    </button>
+
     <!-- Plantilla de una tarjeta de producto: el navegador no la muestra.
          El srcset lo completa catalogo.js (300w / 600w / 900w). -->
     <template id="tpl-producto">
@@ -153,6 +197,8 @@
             <span class="tarjeta__precio"></span>
             <span class="tarjeta__porciones"></span>
           </div>
+          <!-- Reto 2: casilla/botón «Comparar» (JS completa aria-label y aria-pressed) -->
+          <button type="button" class="tarjeta__comparar" aria-pressed="false">Comparar</button>
         </div>
       </li>
     </template>

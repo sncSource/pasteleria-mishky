@@ -643,3 +643,445 @@ html:has(dialog[open]) {
     transition: none !important;
   }
 }
+
+/* =============================================================
+   Novedades v3 · Retos 1 y 2
+   ============================================================= */
+:root {
+  --rosa-oscuro: #a43a52; /* mejor contraste de texto que --rosa */
+}
+
+/* El ancla #catalogo no queda tapada por la cabecera fija */
+#catalogo {
+  scroll-margin-top: 4.5rem;
+}
+
+/* ---------- Botones: variantes y estado deshabilitado ---------- */
+.boton--secundario {
+  background: transparent;
+  color: var(--cacao);
+}
+
+.boton--secundario:hover {
+  background: var(--crema-2);
+  color: var(--chocolate);
+}
+
+.boton:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.boton:disabled:hover {
+  background: var(--cacao);
+  transform: none;
+}
+
+.boton--secundario:disabled:hover {
+  background: transparent;
+}
+
+/* ---------- Reto 1: «Limpiar filtros» ---------- */
+.boton--limpiar {
+  padding: 0.45rem 1.1rem;
+  transition:
+    background 0.2s,
+    color 0.2s,
+    border-color 0.2s,
+    transform 0.2s;
+}
+
+/* Activo (hay filtros): se destaca para invitar a usarlo */
+.boton--limpiar:not(:disabled) {
+  color: var(--rosa-oscuro);
+  border-color: var(--rosa-oscuro);
+}
+
+.boton--limpiar:not(:disabled):hover {
+  background: var(--rosa-oscuro);
+  color: var(--blanco);
+}
+
+/* ---------- Reto 2: botón «Comparar» en la tarjeta ---------- */
+.tarjeta__comparar {
+  align-self: flex-start;
+  margin-top: 0.8rem;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0.35rem 0.95rem;
+  border: 2px solid var(--cacao);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--cacao);
+  transition:
+    background 0.2s,
+    color 0.2s;
+}
+
+.tarjeta__comparar::before {
+  content: "+";
+  margin-right: 0.4rem;
+}
+
+.tarjeta__comparar:hover {
+  background: var(--crema-2);
+}
+
+.tarjeta__comparar[aria-pressed="true"] {
+  background: var(--cacao);
+  color: var(--blanco);
+}
+
+.tarjeta__comparar[aria-pressed="true"]::before {
+  content: "✓";
+}
+
+.tarjeta__comparar:focus-visible {
+  outline: 3px solid var(--dorado);
+  outline-offset: 2px;
+}
+
+/* ---------- Reto 2: barra flotante inferior ---------- */
+.barra-comparar {
+  position: fixed;
+  inset: auto 0 0 0;
+  z-index: 30;
+  padding: 0.7rem 0 calc(0.7rem + env(safe-area-inset-bottom, 0px));
+  color: var(--crema);
+  background: var(--chocolate);
+  box-shadow: 0 -6px 20px rgba(40, 22, 18, 0.3);
+  animation: subir-barra 0.25s ease;
+}
+
+.barra-comparar[hidden] {
+  display: none;
+}
+
+@keyframes subir-barra {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: none;
+  }
+}
+
+.barra-comparar__interior {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem 1.2rem;
+}
+
+.barra-comparar__info {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+
+.barra-comparar__contador {
+  margin: 0 0 0.4rem;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #f3d9a4;
+}
+
+.barra-comparar--limite .barra-comparar__contador {
+  color: #ffc9d1;
+  animation: sacudir 0.4s ease;
+}
+
+@keyframes sacudir {
+  25% {
+    transform: translateX(-5px);
+  }
+  75% {
+    transform: translateX(5px);
+  }
+}
+
+.barra-comparar__lista {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chip {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  max-width: 230px;
+  padding: 0.25rem 0.35rem 0.25rem 0.25rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.chip img {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  object-fit: cover;
+  border-radius: 50%;
+  background: var(--crema-2);
+}
+
+.chip__nombre {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 0.9rem;
+  font-weight: 700;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.chip__quitar {
+  flex: none;
+  width: 1.8rem;
+  height: 1.8rem;
+  font: inherit;
+  font-size: 0.8rem;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--chocolate);
+  background: var(--crema);
+  border: 0;
+  border-radius: 50%;
+}
+
+.chip__quitar:hover {
+  background: #fff;
+}
+
+.barra-comparar__acciones {
+  display: flex;
+  gap: 0.6rem;
+}
+
+/* Botones sobre fondo oscuro */
+.barra-comparar .boton {
+  color: #2b1510;
+  background: var(--dorado);
+  border-color: var(--dorado);
+}
+
+.barra-comparar .boton:hover {
+  background: #dcab57;
+}
+
+.barra-comparar .boton--secundario {
+  color: var(--crema);
+  background: transparent;
+  border-color: var(--crema);
+}
+
+.barra-comparar .boton--secundario:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.barra-comparar .boton:disabled:hover {
+  background: var(--dorado);
+}
+
+.barra-comparar .boton--secundario:disabled:hover {
+  background: transparent;
+}
+
+.barra-comparar :focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: 2px;
+}
+
+/* El pie no queda tapado por la barra (--alto-barra lo calcula JS) */
+body.con-barra .pie {
+  padding-bottom: calc(1.5rem + var(--alto-barra, 0px));
+}
+
+/* ---------- Reto 2: botón «Volver arriba y buscar» ---------- */
+.volver-arriba {
+  position: fixed;
+  right: 1rem;
+  bottom: calc(1rem + var(--alto-barra, 0px));
+  z-index: 25;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0.7rem 1.1rem;
+  color: var(--chocolate);
+  background: var(--blanco);
+  border: 2px solid var(--dorado);
+  border-radius: 999px;
+  box-shadow: var(--sombra);
+  /* Oculto: sin foco ni lectura (visibility) hasta que el observador lo muestre */
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(12px);
+  transition:
+    opacity 0.25s,
+    transform 0.25s,
+    bottom 0.25s,
+    visibility 0s linear 0.25s;
+}
+
+.volver-arriba--visible {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition-delay: 0s;
+}
+
+.volver-arriba:hover {
+  background: var(--crema-2);
+}
+
+.volver-arriba:focus-visible {
+  outline: 3px solid var(--dorado);
+  outline-offset: 3px;
+}
+
+/* ---------- Reto 2: <dialog> comparativo ---------- */
+.modal--comparar {
+  width: min(980px, 100% - 2rem);
+}
+
+.comparar__contenido {
+  position: relative;
+  padding: 1.4rem 1.2rem 1.3rem;
+}
+
+.comparar__titulo {
+  margin: 0 3rem 1rem 0;
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 1.6rem;
+}
+
+.tabla-comparar-contenedor {
+  overflow-x: auto;
+  border: 1px solid var(--crema-2);
+  border-radius: var(--radio);
+}
+
+.tabla-comparar-contenedor:focus-visible {
+  outline: 3px solid var(--dorado);
+  outline-offset: 2px;
+}
+
+.tabla-comparar {
+  width: 100%;
+  /* 1.ª columna + una columna por producto: en móvil la tabla se desplaza */
+  min-width: calc(7.5rem + var(--columnas, 3) * 11rem);
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.tabla-comparar th,
+.tabla-comparar td {
+  padding: 0.8rem 0.9rem;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px dashed var(--crema-2);
+}
+
+.tabla-comparar tbody tr:last-child th,
+.tabla-comparar tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.tabla-comparar th[scope="row"] {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  width: 7.5rem;
+  color: var(--gris);
+  background: var(--blanco);
+}
+
+.tabla-comparar__producto {
+  text-align: center;
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 1.05rem;
+  background: var(--crema);
+}
+
+.tabla-comparar__producto img {
+  width: 96px;
+  height: 96px;
+  margin: 0 auto 0.5rem;
+  object-fit: cover;
+  border-radius: var(--radio);
+  background: var(--crema-2);
+}
+
+.tabla-comparar__agotado {
+  color: #8a1c2b;
+  font-weight: 700;
+}
+
+.tabla-comparar__mejor {
+  color: #2d6a3e;
+  font-weight: 700;
+}
+
+.insignia {
+  display: inline-block;
+  margin-left: 0.4rem;
+  padding: 0.1rem 0.55rem;
+  font-size: 0.75rem;
+  color: #1f4d2c;
+  background: #dcefe0;
+  border-radius: 999px;
+}
+
+.comparar__pie {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 1rem;
+}
+
+/* ---------- Responsive de los retos ---------- */
+@media (max-width: 700px) {
+  .barra-comparar__interior {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .barra-comparar__info {
+    flex-basis: auto;
+  }
+
+  .barra-comparar__acciones .boton {
+    flex: 1;
+  }
+
+  .chip {
+    max-width: 100%;
+  }
+
+  .chip__nombre {
+    max-width: 8.5rem;
+  }
+
+  .comparar__titulo {
+    font-size: 1.35rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .controles .boton--limpiar {
+    width: 100%;
+  }
+
+  .volver-arriba {
+    right: 0.7rem;
+    padding: 0.6rem 0.9rem;
+    font-size: 0.9rem;
+  }
+}
