@@ -643,3 +643,377 @@ html:has(dialog[open]) {
     transition: none !important;
   }
 }
+
+/* =============================================================
+   Novedades v3: pedido, favoritos y avisos
+   ============================================================= */
+:root {
+  --verde-wa: #1f8f4d;
+}
+
+/* ---------- Cabecera: botón "Mi pedido" ---------- */
+.cabecera__acciones {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.boton-pedido {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0.45rem 1rem;
+  border: 2px solid var(--cacao);
+  border-radius: 999px;
+  color: var(--cacao);
+  background: transparent;
+  transition: background 0.2s, color 0.2s;
+}
+
+.boton-pedido:hover {
+  background: var(--cacao);
+  color: var(--blanco);
+}
+
+.boton-pedido:focus-visible {
+  outline: 3px solid var(--dorado);
+  outline-offset: 2px;
+}
+
+.contador {
+  min-width: 1.5rem;
+  padding: 0 0.4rem;
+  text-align: center;
+  font-size: 0.85rem;
+  line-height: 1.5rem;
+  border-radius: 999px;
+  color: var(--blanco);
+  background: var(--rosa);
+}
+
+.contador[hidden] {
+  display: none;
+}
+
+/* ---------- Variantes de botón ---------- */
+.boton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.boton--rosa {
+  background: var(--rosa);
+  border-color: var(--rosa);
+}
+
+.boton--rosa:hover {
+  background: #b04459;
+}
+
+.boton--claro {
+  background: transparent;
+  color: var(--cacao);
+}
+
+.boton--claro:hover {
+  background: var(--crema-2);
+}
+
+.boton--whatsapp {
+  background: var(--verde-wa);
+  border-color: var(--verde-wa);
+}
+
+.boton--whatsapp:hover {
+  background: #17703c;
+}
+
+.boton--agregar {
+  margin-top: 0.9rem;
+  width: 100%;
+  background: var(--rosa);
+  border-color: var(--rosa);
+}
+
+.boton--agregar:hover {
+  background: #b04459;
+}
+
+.boton--agregar:disabled {
+  background: var(--gris);
+  border-color: var(--gris);
+}
+
+.modal__botones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: auto;
+}
+
+/* ---------- Favoritos ---------- */
+.favorito {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  padding: 0;
+  cursor: pointer;
+  border: 0;
+  border-radius: 50%;
+  color: var(--rosa);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s;
+}
+
+.favorito svg {
+  fill: transparent;
+  transition: fill 0.2s;
+}
+
+.favorito[aria-pressed="true"] svg {
+  fill: currentColor;
+}
+
+.favorito:hover {
+  transform: scale(1.12);
+}
+
+.favorito:focus-visible {
+  outline: 3px solid var(--dorado);
+  outline-offset: 2px;
+}
+
+/* ---------- Panel lateral del pedido ---------- */
+.panel {
+  width: min(420px, 100%);
+  height: 100dvh;
+  max-height: 100dvh;
+  margin: 0 0 0 auto;
+  padding: 0;
+  border: 0;
+  color: var(--chocolate);
+  background: var(--crema);
+  box-shadow: -10px 0 40px rgba(40, 22, 18, 0.4);
+}
+
+.panel[open] {
+  display: flex;
+  flex-direction: column;
+  animation: entrada-panel 0.25s ease;
+}
+
+.panel::backdrop {
+  background: rgba(40, 22, 18, 0.6);
+}
+
+@keyframes entrada-panel {
+  from {
+    transform: translateX(40px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+.panel__cabecera {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.2rem;
+  background: var(--blanco);
+  border-bottom: 1px solid var(--crema-2);
+}
+
+.panel__titulo {
+  margin: 0;
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 1.5rem;
+}
+
+.panel__cerrar {
+  width: 2.4rem;
+  height: 2.4rem;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  border: 0;
+  border-radius: 50%;
+  color: var(--chocolate);
+  background: var(--crema-2);
+}
+
+.panel__cerrar:focus-visible {
+  outline: 3px solid var(--dorado);
+  outline-offset: 2px;
+}
+
+.panel__vacio {
+  margin: 2rem 1.2rem;
+  text-align: center;
+  color: var(--gris);
+}
+
+.panel__lista {
+  flex: 1;
+  margin: 0;
+  padding: 0.5rem 1.2rem;
+  list-style: none;
+  overflow-y: auto;
+}
+
+.panel__lista:empty {
+  flex: 0;
+  padding: 0;
+}
+
+.panel__pie {
+  display: grid;
+  gap: 0.6rem;
+  padding: 1rem 1.2rem 1.2rem;
+  background: var(--blanco);
+  border-top: 1px solid var(--crema-2);
+}
+
+.panel__total {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.panel__total strong {
+  font-size: 1.5rem;
+}
+
+.panel__pie .boton {
+  width: 100%;
+}
+
+.item-pedido {
+  display: grid;
+  grid-template-columns: 64px 1fr auto;
+  gap: 0.8rem;
+  align-items: start;
+  padding: 0.8rem 0;
+  border-bottom: 1px dashed var(--crema-2);
+}
+
+.item-pedido__img {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: 10px;
+  background: var(--crema-2);
+}
+
+.item-pedido__info p,
+.item-pedido__lado p {
+  margin: 0;
+}
+
+.item-pedido__nombre {
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.item-pedido__precio {
+  font-size: 0.85rem;
+  color: var(--gris);
+}
+
+.item-pedido__lado {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.4rem;
+}
+
+.item-pedido__subtotal {
+  font-weight: 700;
+}
+
+.item-pedido__quitar {
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  padding: 0;
+  border: 0;
+  color: #a3202f;
+  background: none;
+  text-decoration: underline;
+}
+
+.cantidad {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 0.4rem;
+  border: 2px solid var(--cacao);
+  border-radius: 999px;
+}
+
+.cantidad button {
+  width: 2rem;
+  height: 2rem;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  border: 0;
+  border-radius: 50%;
+  color: var(--cacao);
+  background: transparent;
+}
+
+.cantidad button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.cantidad__valor {
+  min-width: 1.6rem;
+  text-align: center;
+  font-weight: 700;
+}
+
+.cantidad button:focus-visible,
+.item-pedido__quitar:focus-visible {
+  outline: 3px solid var(--dorado);
+  outline-offset: 2px;
+}
+
+/* ---------- Aviso (toast) ---------- */
+.toast {
+  position: fixed;
+  inset: auto auto 1.2rem 50%;
+  transform: translateX(-50%);
+  margin: 0;
+  max-width: calc(100% - 2rem);
+  padding: 0.7rem 1.2rem;
+  border: 0;
+  border-radius: 999px;
+  font-weight: 700;
+  text-align: center;
+  color: var(--blanco);
+  background: var(--chocolate);
+  box-shadow: 0 8px 24px rgba(40, 22, 18, 0.35);
+}
+
+@media (max-width: 600px) {
+  .cabecera__acciones {
+    gap: 0.8rem;
+  }
+  .boton-pedido > span:not(.contador) {
+    display: none; /* en móvil solo se ve el ícono y el contador */
+  }
+}

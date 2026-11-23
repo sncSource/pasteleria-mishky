@@ -1,10 +1,13 @@
 // =============================================================
-// Pastelería Mishky · Catálogo dinámico (v2)
+// Pastelería Mishky · Catálogo dinámico (v3)
 // - Carga data/productos.json con fetch y valida cada producto
 // - Filtros por categoría + buscador + orden + ocultar agotados
 // - Contadores dinámicos, hash en la URL, modal <dialog>
 // - Imágenes responsivas (srcset/sizes) con carga diferida
 // - Tarjetas "fantasma", estados de error y botón Reintentar
+// - NUEVO v3: pedido (carrito) con localStorage y envío por WhatsApp
+// - NUEVO v3: favoritos con corazón + filtro "Solo favoritos"
+// - NUEVO v3: avisos (toast) al agregar productos
 // =============================================================
 
 const RUTA_DATOS = "data/productos.json";
@@ -19,6 +22,12 @@ const USAR_SRCSET = true;
 const ANCHOS_REDUCIDOS = [300, 600]; // carpetas: img/productos/300w/, 600w/
 const ANCHO_ORIGINAL = 900; // la foto original sigue en img/productos/
 const SIZES_MODAL = "(max-width: 700px) calc(100vw - 2rem), 460px";
+
+// --- Pedido y favoritos (v3) -----------------------------------
+const CLAVE_PEDIDO = "mishky-pedido-v1"; // clave en localStorage
+const CLAVE_FAVORITOS = "mishky-favoritos-v1";
+const WHATSAPP = "51984000111"; // 51 = código de Perú + número de la pastelería
+const DURACION_AVISO = 2600; // ms que se ve el aviso
 
 const CANTIDAD_FANTASMAS = 8;
 const EXTENSIONES_VALIDAS = /\.(?:jpe?g|png|webp|avif|gif|svg)$/i;
@@ -45,6 +54,21 @@ const modalStock = document.querySelector("#modal-stock");
 const modalPorciones = document.querySelector("#modal-porciones");
 const modalCerrar = document.querySelector("#modal-cerrar");
 const modalCerrarPie = document.querySelector("#modal-cerrar-pie");
+const modalAgregar = document.querySelector("#modal-agregar");
+
+const casillaFavoritos = document.querySelector("#solo-favoritos");
+
+const btnPedido = document.querySelector("#btn-pedido");
+const contadorPedido = document.querySelector("#pedido-contador");
+const panel = document.querySelector("#carrito");
+const panelCerrar = document.querySelector("#carrito-cerrar");
+const panelVacio = document.querySelector("#carrito-vacio");
+const panelLista = document.querySelector("#carrito-lista");
+const panelTotal = document.querySelector("#carrito-total");
+const btnWhatsapp = document.querySelector("#carrito-whatsapp");
+const btnVaciar = document.querySelector("#carrito-vaciar");
+const plantillaItem = document.querySelector("#tpl-item-pedido");
+const avisoBreve = document.querySelector("#toast");
 
 // --- Estado de la aplicación ----------------------------------
 let productos = []; // solo productos válidos
@@ -57,6 +81,13 @@ let ocultarAgotados = false;
 let cargando = false;
 let tarjetaOrigen = null; // tarjeta que abrió el modal (para devolver el foco)
 let temporizadorBusqueda = null;
+
+// v3: el pedido es un Map id -> cantidad; los favoritos, un Set de ids
+let pedido = new Map();
+let favoritos = new Set();
+let soloFavoritos = false;
+let idModalActual = null;
+let temporizadorAviso = null;
 
 // Formato de moneda peruana: S/ 89.90
 const soles = new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN" });
@@ -245,7 +276,8 @@ function calcularVista() {
   const base = productos.filter(
     (p) =>
       (consulta === "" || normalizar(p.nombre).includes(consulta)) &&
-      (!ocultarAgotados || p.stock > 0),
+      (!ocultarAgotados || p.stock > 0) &&
+      (!soloFavoritos || favoritos.has(p.id)),
   );
 
   // Conteo por categoría con buscador y stock ya aplicados
@@ -333,6 +365,7 @@ function crearTarjeta(p) {
   tarjeta.setAttribute("aria-haspopup", "dialog");
 
   configurarImagen(img, p);
+  pintarFavorito(nodo.querySelector(".favorito"), p);
 
   nodo.querySelector(".tarjeta__categoria").textContent = p.categoria;
   nodo.querySelector(".tarjeta__nombre").textContent = p.nombre;
@@ -346,6 +379,10 @@ function crearTarjeta(p) {
     etiqueta.classList.add("etiqueta--agotado");
     etiqueta.hidden = false;
     tarjeta.classList.add("tarjeta--agotado");
+
+    const btnAgregar = nodo.querySelector(".boton--agregar");
+    btnAgregar.disabled = true;
+    btnAgregar.textContent = "Agotado";
   } else if (p.destacado) {
     etiqueta.textContent = "Favorito";
     etiqueta.hidden = false;
@@ -361,6 +398,7 @@ function textoEstado(total) {
   if (categoriaActiva !== TODAS) partes.push(`en «${categoriaActiva}»`);
   if (busqueda.trim() !== "") partes.push(`que coinciden con «${busqueda.trim()}»`);
   if (ocultarAgotados) partes.push("(solo disponibles)");
+  if (soloFavoritos) partes.push("(solo favoritos)");
   return `${partes.join(" ")}.`;
 }
 
@@ -403,6 +441,10 @@ function abrirModal(tarjeta) {
   if (!p || typeof modal.showModal !== "function") return;
 
   tarjetaOrigen = tarjeta;
+  idModalActual = p.id;
+
+  modalAgregar.disabled = p.stock === 0;
+  modalAgregar.textContent = p.stock === 0 ? "Agotado" : "Agregar al pedido";
 
   configurarImagen(modalImg, p, SIZES_MODAL);
   modalCategoria.textContent = p.categoria;
@@ -425,6 +467,7 @@ modal.addEventListener("close", () => {
 
 modalCerrar.addEventListener("click", () => modal.close());
 modalCerrarPie.addEventListener("click", () => modal.close());
+modalAgregar.addEventListener("click", () => agregarAlPedido(idModalActual));
 
 // Clic en el fondo oscuro (el propio <dialog>, fuera del contenido)
 modal.addEventListener("click", (evento) => {
@@ -509,6 +552,8 @@ contControles.addEventListener("change", (evento) => {
     orden = campoOrden.value;
   } else if (evento.target === casillaAgotados) {
     ocultarAgotados = casillaAgotados.checked;
+  } else if (evento.target === casillaFavoritos) {
+    soloFavoritos = casillaFavoritos.checked;
   } else {
     return;
   }
@@ -519,7 +564,18 @@ contControles.addEventListener("change", (evento) => {
 // Tarjetas: un solo listener en #grilla
 grilla.addEventListener("click", (evento) => {
   const tarjeta = evento.target.closest(".tarjeta[data-id]");
-  if (tarjeta && grilla.contains(tarjeta)) abrirModal(tarjeta);
+  if (!tarjeta || !grilla.contains(tarjeta)) return;
+
+  // Los botones de la tarjeta (corazón, agregar) NO abren el modal
+  const boton = evento.target.closest("[data-accion]");
+  if (boton) {
+    const id = Number(tarjeta.dataset.id);
+    if (boton.dataset.accion === "agregar") agregarAlPedido(id);
+    else if (boton.dataset.accion === "favorito") alternarFavorito(id, boton);
+    return;
+  }
+
+  abrirModal(tarjeta);
 });
 
 grilla.addEventListener("keydown", (evento) => {
@@ -537,7 +593,236 @@ btnReintentar.addEventListener("click", () => {
 });
 
 // =============================================================
-// 10. Inicio
+// 10. Favoritos y pedido (v3)
+// =============================================================
+
+// --- localStorage con protección (puede estar bloqueado) -------
+function leerAlmacen(clave, respaldo) {
+  try {
+    const texto = localStorage.getItem(clave);
+    return texto ? JSON.parse(texto) : respaldo;
+  } catch {
+    return respaldo;
+  }
+}
+
+function guardarAlmacen(clave, valor) {
+  try {
+    localStorage.setItem(clave, JSON.stringify(valor));
+  } catch (error) {
+    console.warn("No se pudo guardar en localStorage:", error);
+  }
+}
+
+// Recupera lo guardado y lo valida contra el catálogo actual:
+// un producto que ya no existe o se agotó no se queda en el pedido.
+function cargarGuardado() {
+  pedido = new Map();
+  const guardado = leerAlmacen(CLAVE_PEDIDO, []);
+  if (Array.isArray(guardado)) {
+    guardado.forEach((item) => {
+      const p = productosPorId.get(item?.id);
+      const cantidad = Math.floor(Number(item?.cantidad));
+      if (p && p.stock > 0 && cantidad > 0) pedido.set(p.id, Math.min(cantidad, p.stock));
+    });
+  }
+
+  const favs = leerAlmacen(CLAVE_FAVORITOS, []);
+  favoritos = new Set(Array.isArray(favs) ? favs.filter((id) => productosPorId.has(id)) : []);
+}
+
+const guardarPedido = () =>
+  guardarAlmacen(CLAVE_PEDIDO, [...pedido].map(([id, cantidad]) => ({ id, cantidad })));
+const guardarFavoritos = () => guardarAlmacen(CLAVE_FAVORITOS, [...favoritos]);
+
+// --- Aviso breve (toast) ---------------------------------------
+function mostrarAviso(texto) {
+  avisoBreve.textContent = texto;
+  if (typeof avisoBreve.showPopover === "function") {
+    if (!avisoBreve.matches(":popover-open")) avisoBreve.showPopover();
+    clearTimeout(temporizadorAviso);
+    temporizadorAviso = setTimeout(() => avisoBreve.hidePopover(), DURACION_AVISO);
+  }
+}
+
+// --- Favoritos --------------------------------------------------
+function pintarFavorito(boton, p) {
+  const activo = favoritos.has(p.id);
+  boton.setAttribute("aria-pressed", String(activo));
+  boton.setAttribute(
+    "aria-label",
+    activo ? `Quitar «${p.nombre}» de favoritos` : `Marcar «${p.nombre}» como favorito`,
+  );
+}
+
+function alternarFavorito(id, boton) {
+  const p = productosPorId.get(id);
+  if (!p) return;
+
+  if (favoritos.has(id)) favoritos.delete(id);
+  else favoritos.add(id);
+  guardarFavoritos();
+
+  if (soloFavoritos) {
+    // La tarjeta puede desaparecer: se vuelve a calcular y se mueve el foco
+    actualizarVista();
+    estado.focus();
+  } else {
+    pintarFavorito(boton, p);
+  }
+}
+
+// --- Pedido -----------------------------------------------------
+// Se trabaja con céntimos (enteros) para evitar errores de decimales
+const centimos = (p) => Math.round(p.precio * 100);
+const formatoCentimos = (c) => soles.format(c / 100);
+
+function totalPedido() {
+  let total = 0;
+  pedido.forEach((cantidad, id) => {
+    total += centimos(productosPorId.get(id)) * cantidad;
+  });
+  return total;
+}
+
+function cantidadTotal() {
+  let n = 0;
+  pedido.forEach((cantidad) => (n += cantidad));
+  return n;
+}
+
+function agregarAlPedido(id) {
+  const p = productosPorId.get(id);
+  if (!p || p.stock === 0) return;
+
+  const actual = pedido.get(id) ?? 0;
+  if (actual >= p.stock) {
+    mostrarAviso(`Solo hay ${p.stock} ${p.stock === 1 ? "unidad" : "unidades"} de «${p.nombre}».`);
+    return;
+  }
+
+  pedido.set(id, actual + 1);
+  guardarPedido();
+  actualizarPedido();
+  mostrarAviso(`«${p.nombre}» agregado a su pedido.`);
+}
+
+function cambiarCantidad(id, delta) {
+  const p = productosPorId.get(id);
+  if (!p) return;
+
+  const nueva = (pedido.get(id) ?? 0) + delta;
+  if (nueva <= 0) pedido.delete(id);
+  else if (nueva <= p.stock) pedido.set(id, nueva);
+  else mostrarAviso(`Solo hay ${p.stock} ${p.stock === 1 ? "unidad" : "unidades"} de «${p.nombre}».`);
+
+  guardarPedido();
+}
+
+// Redibuja el panel, el contador y el total.
+// "foco" ({id, accion}) devuelve el foco al botón que se usó.
+function actualizarPedido(foco) {
+  const unidades = cantidadTotal();
+
+  contadorPedido.textContent = unidades;
+  contadorPedido.hidden = unidades === 0;
+  btnPedido.setAttribute(
+    "aria-label",
+    `Mi pedido, ${unidades} ${unidades === 1 ? "producto" : "productos"}`,
+  );
+
+  const fragmento = document.createDocumentFragment();
+  pedido.forEach((cantidad, id) => {
+    const p = productosPorId.get(id);
+    const nodo = document.importNode(plantillaItem.content, true);
+    const item = nodo.querySelector(".item-pedido");
+
+    item.dataset.id = id;
+    configurarImagen(nodo.querySelector("img"), p, "64px");
+    nodo.querySelector(".item-pedido__nombre").textContent = p.nombre;
+    nodo.querySelector(".item-pedido__precio").textContent = soles.format(p.precio);
+    nodo.querySelector(".cantidad__valor").textContent = cantidad;
+    nodo.querySelector(".item-pedido__subtotal").textContent = formatoCentimos(centimos(p) * cantidad);
+    nodo.querySelector('[data-accion="mas"]').disabled = cantidad >= p.stock;
+    nodo.querySelector('[data-accion="quitar"]').setAttribute("aria-label", `Quitar «${p.nombre}» del pedido`);
+    fragmento.append(nodo);
+  });
+  panelLista.replaceChildren(fragmento);
+
+  panelVacio.hidden = pedido.size > 0;
+  panelTotal.textContent = formatoCentimos(totalPedido());
+  btnWhatsapp.disabled = pedido.size === 0;
+  btnVaciar.disabled = pedido.size === 0;
+
+  if (foco) {
+    const objetivo = panelLista.querySelector(`[data-id="${foco.id}"] [data-accion="${foco.accion}"]:not(:disabled)`);
+    (objetivo ?? panelCerrar).focus();
+  }
+}
+
+// Mensaje que se envía por WhatsApp
+function construirMensaje() {
+  const lineas = [...pedido].map(([id, cantidad]) => {
+    const p = productosPorId.get(id);
+    return `• ${cantidad} × ${p.nombre} — ${formatoCentimos(centimos(p) * cantidad)}`;
+  });
+  return [
+    "Hola Pastelería Mishky, quisiera hacer este pedido:",
+    "",
+    ...lineas,
+    "",
+    `Total: ${formatoCentimos(totalPedido())}`,
+  ].join("\n");
+}
+
+function enviarPorWhatsapp() {
+  if (pedido.size === 0) return;
+  const url = `https://wa.me/${WHATSAPP}?text=${encodeURIComponent(construirMensaje())}`;
+  window.open(url, "_blank", "noopener");
+}
+
+// Eventos del pedido
+btnPedido.addEventListener("click", () => panel.showModal());
+panelCerrar.addEventListener("click", () => panel.close());
+panel.addEventListener("close", () => btnPedido.focus());
+
+// Clic en el fondo oscuro: está fuera del rectángulo del panel
+panel.addEventListener("click", (evento) => {
+  const caja = panel.getBoundingClientRect();
+  const fuera =
+    evento.clientX < caja.left || evento.clientX > caja.right ||
+    evento.clientY < caja.top || evento.clientY > caja.bottom;
+  if (fuera) panel.close();
+});
+
+panelLista.addEventListener("click", (evento) => {
+  const boton = evento.target.closest("[data-accion]");
+  const item = evento.target.closest(".item-pedido");
+  if (!boton || !item) return;
+
+  const id = Number(item.dataset.id);
+  const accion = boton.dataset.accion;
+
+  if (accion === "mas") cambiarCantidad(id, 1);
+  else if (accion === "menos") cambiarCantidad(id, -1);
+  else if (accion === "quitar") {
+    pedido.delete(id);
+    guardarPedido();
+  }
+  actualizarPedido({ id, accion });
+});
+
+btnVaciar.addEventListener("click", () => {
+  pedido.clear();
+  guardarPedido();
+  actualizarPedido();
+  panelCerrar.focus();
+});
+
+btnWhatsapp.addEventListener("click", enviarPorWhatsapp);
+
+// =============================================================
+// 11. Inicio
 // =============================================================
 function activarControles(activo) {
   contControles.querySelectorAll("input, select").forEach((el) => {
@@ -551,6 +836,7 @@ function sincronizarControles() {
   orden = campoOrden.value in COMPARADORES ? campoOrden.value : "precio-asc";
   campoOrden.value = orden;
   ocultarAgotados = casillaAgotados.checked;
+  soloFavoritos = casillaFavoritos.checked;
 }
 
 function mostrarError(error) {
@@ -558,6 +844,8 @@ function mostrarError(error) {
 
   productos = [];
   productosPorId = new Map();
+  pedido = new Map();
+  actualizarPedido();
   grilla.replaceChildren();
   contFiltros.replaceChildren();
 
@@ -599,10 +887,12 @@ async function iniciar() {
     categorias = obtenerCategorias(productos);
     categoriaActiva = leerCategoriaDeHash() ?? TODAS;
 
+    cargarGuardado();
     sincronizarControles();
     renderizarFiltros();
     activarControles(true);
     actualizarVista();
+    actualizarPedido();
   } catch (error) {
     mostrarError(error);
   } finally {

@@ -23,12 +23,21 @@
         <a href="catalogo.html" class="marca">
           <img src="img/logo.png" alt="Pastelería Mishky" width="176" height="52" />
         </a>
-        <nav aria-label="Principal">
-          <ul class="menu">
-            <li><a href="#catalogo" aria-current="page">Catálogo</a></li>
-            <li><a href="#contacto">Contacto</a></li>
-          </ul>
-        </nav>
+        <div class="cabecera__acciones">
+          <nav aria-label="Principal">
+            <ul class="menu">
+              <li><a href="#catalogo" aria-current="page">Catálogo</a></li>
+              <li><a href="#contacto">Contacto</a></li>
+            </ul>
+          </nav>
+          <button type="button" id="btn-pedido" class="boton-pedido" aria-haspopup="dialog">
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+              <path d="M6 7h12l1 13H5L6 7Z M9 7a3 3 0 0 1 6 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
+            </svg>
+            <span>Mi pedido</span>
+            <span id="pedido-contador" class="contador" aria-hidden="true">0</span>
+          </button>
+        </div>
       </div>
     </header>
 
@@ -69,6 +78,11 @@
         <label class="campo campo--check" for="ocultar-agotados">
           <input id="ocultar-agotados" type="checkbox" disabled />
           <span>Ocultar agotados</span>
+        </label>
+
+        <label class="campo campo--check" for="solo-favoritos">
+          <input id="solo-favoritos" type="checkbox" disabled />
+          <span>Solo favoritos</span>
         </label>
       </div>
 
@@ -125,10 +139,55 @@
               <dd id="modal-porciones"></dd>
             </div>
           </dl>
-          <button type="button" id="modal-cerrar-pie" class="boton">Cerrar</button>
+          <div class="modal__botones">
+            <button type="button" id="modal-agregar" class="boton boton--rosa">Agregar al pedido</button>
+            <button type="button" id="modal-cerrar-pie" class="boton boton--claro">Cerrar</button>
+          </div>
         </div>
       </div>
     </dialog>
+
+    <!-- Pedido: panel lateral con <dialog>. Se llena desde catalogo.js -->
+    <dialog id="carrito" class="panel" aria-labelledby="carrito-titulo">
+      <div class="panel__cabecera">
+        <h2 id="carrito-titulo" class="panel__titulo">Su pedido</h2>
+        <button type="button" id="carrito-cerrar" class="panel__cerrar" aria-label="Cerrar pedido">✕</button>
+      </div>
+      <p id="carrito-vacio" class="panel__vacio">
+        Aún no agregó productos. Elija sus favoritos del catálogo y aparecerán aquí.
+      </p>
+      <ul id="carrito-lista" class="panel__lista"></ul>
+      <div class="panel__pie">
+        <p class="panel__total"><span>Total</span> <strong id="carrito-total">S/ 0.00</strong></p>
+        <button type="button" id="carrito-whatsapp" class="boton boton--whatsapp" disabled>
+          Enviar pedido por WhatsApp
+        </button>
+        <button type="button" id="carrito-vaciar" class="boton boton--claro" disabled>Vaciar pedido</button>
+      </div>
+    </dialog>
+
+    <!-- Aviso breve (popover: se ve incluso encima de los modales) -->
+    <div id="toast" class="toast" popover="manual" role="status" aria-live="polite"></div>
+
+    <!-- Plantilla de un producto dentro del pedido -->
+    <template id="tpl-item-pedido">
+      <li class="item-pedido">
+        <img class="item-pedido__img" width="64" height="64" alt="" />
+        <div class="item-pedido__info">
+          <p class="item-pedido__nombre"></p>
+          <p class="item-pedido__precio"></p>
+          <div class="cantidad">
+            <button type="button" data-accion="menos" aria-label="Quitar una unidad">−</button>
+            <output class="cantidad__valor"></output>
+            <button type="button" data-accion="mas" aria-label="Agregar una unidad">+</button>
+          </div>
+        </div>
+        <div class="item-pedido__lado">
+          <p class="item-pedido__subtotal"></p>
+          <button type="button" data-accion="quitar" class="item-pedido__quitar">Quitar</button>
+        </div>
+      </li>
+    </template>
 
     <!-- Plantilla de una tarjeta de producto: el navegador no la muestra.
          El srcset lo completa catalogo.js (300w / 600w / 900w). -->
@@ -144,6 +203,11 @@
             alt=""
           />
           <span class="etiqueta" hidden></span>
+          <button type="button" class="favorito" data-accion="favorito" aria-pressed="false">
+            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false">
+              <path d="M12 21s-7.5-4.6-9.5-9.2C1.2 8.7 3 5.5 6.2 5.5c2 0 3.2 1 3.8 2.1.6-1.1 1.8-2.1 3.8-2.1 3.2 0 5 3.2 3.7 6.3C19.5 16.4 12 21 12 21Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" />
+            </svg>
+          </button>
         </figure>
         <div class="tarjeta__cuerpo">
           <p class="tarjeta__categoria"></p>
@@ -153,6 +217,7 @@
             <span class="tarjeta__precio"></span>
             <span class="tarjeta__porciones"></span>
           </div>
+          <button type="button" class="boton boton--agregar" data-accion="agregar">Agregar al pedido</button>
         </div>
       </li>
     </template>
